@@ -1,4 +1,5 @@
 import lzma
+import random
 import struct
 import time
 import winreg
@@ -194,7 +195,9 @@ STEAM_DOWNLOAD_SERVERS = []
 
 def download_and_decrypt_chunk(depot_id: str, chunk_sha_hex: str, decryption_key: str):
     """下载并解密数据块"""
-    for server_host in STEAM_DOWNLOAD_SERVERS:
+    servers = STEAM_DOWNLOAD_SERVERS.copy()
+    random.shuffle(servers)
+    for server_host in servers:
         try:
             # 下载
             url = f"http://{server_host}/depot/{depot_id}/chunk/{chunk_sha_hex}"
