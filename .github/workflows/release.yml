@@ -71,17 +71,6 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Steam-Download-Proxy-Generator ${{ steps.get_version.outputs.version }}
-          body: |
-            ## Steam-Download-Proxy-Generator v${{ steps.get_version.outputs.version }}
-            
-            ### 包含文件
-            - `generator.exe` - 生成器
-            - `downloader.exe` - 下载器
-            
-            ### 使用说明
-            1. 解压压缩包
-            2. 运行 generator.exe 或 downloader.exe
+          generate_release_notes: true  # 自动生成提交日志
           files: |
             Steam-Download-Proxy-Generator-*.zip
-          draft: false
-          prerelease: false
