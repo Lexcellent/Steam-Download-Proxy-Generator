@@ -63,16 +63,14 @@ def main():
                 continue
 
             # 创建文件（如果不存在）
-            match MappingFlags(str(mapping.flags)):
-                case MappingFlags.file:
-                    game_file = Path(mapping.filename)
-                    game_file.parent.mkdir(parents=True, exist_ok=True)
-                    game_file.touch(exist_ok=True)
+            match str(mapping.flags):
                 case MappingFlags.dir:
                     game_file = Path(mapping.filename)
                     game_file.mkdir(parents=True, exist_ok=True)
                 case _:
-                    raise TypeError(f"意料以外的文件类型:{mapping.flags}")
+                    game_file = Path(mapping.filename)
+                    game_file.parent.mkdir(parents=True, exist_ok=True)
+                    game_file.touch(exist_ok=True)
             if mapping.filename not in file_locks:
                 file_locks[mapping.filename] = threading.Lock()
             # 提交所有任务
