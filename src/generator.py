@@ -46,6 +46,7 @@ def main():
         if path.exists("downloader.exe"):
             shutil.copy("downloader.exe", target_dir)
         logger.success(f"【{selected_game.name}】生成完毕")
+        input("回车键继续……")
 
 if __name__ == "__main__":
     try:
