@@ -210,6 +210,8 @@ def download_and_decrypt_chunk(depot_id: str, chunk_sha_hex: str, decryption_key
             return decompress_chunk(data)
         except httpx.ReadTimeout as _:
             pass
+        except httpx.ReadError as _:
+            pass
         except Exception as e:
             logger.exception(e)
     raise ConnectionError("下载失败，检查网络状况")
