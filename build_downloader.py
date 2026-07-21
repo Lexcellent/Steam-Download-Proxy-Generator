@@ -40,9 +40,9 @@ def build_executable():
 
 def main():
     if build_executable():
-        print("打包成功！")
+        print("Build successful!")
     else:
-        print("打包失败！")
+        print("Build failed!")
 
 
 if __name__ == "__main__":
