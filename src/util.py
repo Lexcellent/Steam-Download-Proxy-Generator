@@ -239,13 +239,13 @@ def test_cdn_server(server: ContentServer, depot_id: str, chunk_sha: str):
 
 
 def get_content_servers(cell_id: int, num_servers=40):
-    for _ in range(3):
+    for index in range(3):
         try:
             return get_content_servers_from_webapi(cell_id, num_servers=num_servers)
         except requests.exceptions.ConnectTimeout as _:
-            pass
+            logger.warning(f"cell_id:{cell_id} 获取超时，重试：{index + 1}")
         except requests.exceptions.ConnectionError as _:
-            pass
+            logger.warning(f"cell_id:{cell_id} 连接失败，重试：{index + 1}")
     return []
 
 
