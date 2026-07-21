@@ -70,7 +70,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: Steam-Download-Proxy-Generator ${{ steps.get_version.outputs.version }}
+          name: SDPG ${{ steps.get_version.outputs.version }}
           generate_release_notes: true  # 自动生成提交日志
           files: |
             Steam-Download-Proxy-Generator-*.zip
