@@ -9,7 +9,7 @@ from steam.core.manifest import DepotManifest
 from tqdm import tqdm
 
 from enums.Status import MappingFlags
-from util import download_and_decrypt_chunk
+from util import download_and_decrypt_chunk, refresh_cdn_server
 
 
 def main():
@@ -28,12 +28,14 @@ def main():
             manifest = DepotManifest(f.read())
         total_size += int(manifest.metadata.cb_disk_original)
         manifests.append(manifest)
-
-    pbar = tqdm(total=total_size, unit="B", unit_scale=True, mininterval=1)
+    # 刷新服务器节点
+    refresh_cdn_server()
 
     executor = ThreadPoolExecutor(max_workers=64)
     file_locks = {}
     futures = []
+
+    pbar = tqdm(total=total_size, unit="B", unit_scale=True, mininterval=1)
 
     def download(mapping, manifest: DepotManifest, chunk):
         # 文件写入锁
@@ -75,12 +77,13 @@ def main():
                 file_locks[mapping.filename] = threading.Lock()
             # 提交所有任务
             futures.extend([executor.submit(download, mapping, manifest, chunk) for chunk in sorted(mapping.chunks, key=lambda x: x.offset)])
-    # 等待完成
-    for future in as_completed(futures):
-        try:
-            future.result()
-        except Exception as e:
-            logger.exception(e)
+    if len(futures) > 0:
+        # 等待完成
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                logger.exception(e)
     executor.shutdown()
     pbar.close()
     logger.success("下载完毕")

@@ -1,5 +1,6 @@
 import lzma
 import struct
+import time
 import winreg
 from binascii import crc32
 from io import BytesIO
@@ -11,9 +12,9 @@ import httpx
 import vdf
 import zstandard as zstd
 from loguru import logger
+from steam.client.cdn import ContentServer, get_content_servers_from_webapi
 from steam.core.crypto import symmetric_decrypt
 
-from config import STEAM_DOWNLOAD_SERVERS
 from entitys.Depot import InstalledDepot
 from entitys.Game import InstalledGame
 from enums.Status import StateFlags
@@ -110,6 +111,7 @@ def decompress_chunk(data: bytes) -> bytes:
     # 4. raw
     return data
 
+
 def _decompress_vsza(data: bytes) -> bytes:
     """
     Steam VSZa chunk 解压
@@ -135,6 +137,7 @@ def _decompress_vsza(data: bytes) -> bytes:
     except Exception as e:
         raise ValueError(f"VSZa zstd解压失败: {e}")
     return result
+
 
 def _decompress_vz(data: bytes) -> bytes:
     """解压 VZ 格式 - 基于你的代码逻辑"""
@@ -177,11 +180,15 @@ def _decompress_zip(data: bytes) -> bytes:
 
 _httpx_client = None
 
+
 def get_httpx_client() -> httpx.Client:
     global _httpx_client
     if _httpx_client is None:
         _httpx_client = httpx.Client()
     return _httpx_client
+
+
+STEAM_DOWNLOAD_SERVERS = []
 
 
 def download_and_decrypt_chunk(depot_id: str, chunk_sha_hex: str, decryption_key: str):
@@ -197,6 +204,54 @@ def download_and_decrypt_chunk(depot_id: str, chunk_sha_hex: str, decryption_key
             key = bytes.fromhex(decryption_key)
             data = symmetric_decrypt(resp.content, key)
             return decompress_chunk(data)
+        except httpx.ReadTimeout as _:
+            pass
         except Exception as e:
             logger.exception(e)
     raise ConnectionError("下载失败，检查网络状况")
+
+
+def test_cdn_server(server: ContentServer, depot_id: str, chunk_sha: str):
+    """
+    测试 Steam CDN 节点下载 chunk 耗时
+    """
+
+    if not server.host.endswith(".steamcontent.com"):
+        return None
+    url = f"http://{server.host}/depot/{depot_id}/chunk/{chunk_sha}"
+    try:
+        start = time.perf_counter()
+        resp = get_httpx_client().get(url,timeout=30)
+        cost = time.perf_counter() - start
+        if resp.status_code == 200:
+            return {
+                "host": server.host,
+                "time": cost,
+                "size": len(resp.content)
+            }
+    except Exception:
+        pass
+    return None
+
+
+def refresh_cdn_server():
+    logger.info("刷新服务器节点列表")
+    servers = get_content_servers_from_webapi(0, num_servers=40)
+    results = []
+    for server in servers:
+        result = test_cdn_server(server, "3167021", "ccb1bf52956792fac3372220ced49880e0bcec2b")
+        if result:
+            results.append(result)
+    if len(results) == 0:
+        servers = get_content_servers_from_webapi(33, num_servers=40)
+        for server in servers:
+            result = test_cdn_server(server, "3167021", "ccb1bf52956792fac3372220ced49880e0bcec2b")
+            if result:
+                results.append(result)
+        if len(results) == 0:
+            raise Exception("未找到合适的下载节点")
+    results.sort(key=lambda x: x["time"])
+    logger.debug(results)
+    global STEAM_DOWNLOAD_SERVERS
+    STEAM_DOWNLOAD_SERVERS = [result["host"] for result in results]
+    logger.info(f"刷新完成，{len(STEAM_DOWNLOAD_SERVERS)}个节点：{STEAM_DOWNLOAD_SERVERS}")
