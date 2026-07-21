@@ -8,6 +8,7 @@ from loguru import logger
 from steam.core.manifest import DepotManifest
 from tqdm import tqdm
 
+from enums.Status import MappingFlags
 from util import download_and_decrypt_chunk
 
 
@@ -28,49 +29,59 @@ def main():
         total_size += int(manifest.metadata.cb_disk_original)
         manifests.append(manifest)
 
-    pbar = tqdm(total=total_size, unit="B", unit_scale=True)
-    file_lock = threading.Lock()
+    pbar = tqdm(total=total_size, unit="B", unit_scale=True, mininterval=1)
+
+    executor = ThreadPoolExecutor(max_workers=64)
+    file_locks = {}
+    futures = []
+
+    def download(mapping, manifest: DepotManifest, chunk):
+        # 文件写入锁
+        lock = file_locks[mapping.filename]
+        # print(chunk)
+        chunk_data = download_and_decrypt_chunk(str(manifest.depot_id), chunk.sha.hex(), depots[str(manifest.depot_id)])
+        if len(chunk_data) != chunk.cb_original:
+            logger.warning(
+                f"Chunk 大小不匹配: {mapping.filename} offset={chunk.offset}, "
+                f"期望 {chunk.cb_original}, 实际 {len(chunk_data)}"
+            )
+        # 按偏移量写入文件
+        with lock:
+            with open(mapping.filename, "r+b") as fp:
+                fp.seek(chunk.offset)
+                fp.write(chunk_data)
+            pbar.update(int(chunk.cb_original))
+
     for manifest in manifests:
         for mapping in manifest.payload.mappings:
-            # print(mapping.filename)
-            # print(mapping.sha_content.hex())
-            # print(humanize.naturalsize(mapping.size))
-            # print(mapping)
             # 如果文件已存在，对比文件大小
             if path.exists(mapping.filename) and path.getsize(mapping.filename) == mapping.size:
                 # 已存在,直接更新进度
                 pbar.update(int(mapping.size))
                 continue
+
             # 创建文件（如果不存在）
-            game_file = Path(mapping.filename)
-            game_file.parent.mkdir(parents=True, exist_ok=True)
-            game_file.touch(exist_ok=True)
-
-            def download(chunk):
-                # print(chunk)
-                chunk_data = download_and_decrypt_chunk(str(manifest.depot_id), chunk.sha.hex(), depots[str(manifest.depot_id)])
-                if len(chunk_data) != chunk.cb_original:
-                    logger.warning(
-                        f"Chunk 大小不匹配: {mapping.filename} offset={chunk.offset}, "
-                        f"期望 {chunk.cb_original}, 实际 {len(chunk_data)}"
-                    )
-                # 按偏移量写入文件
-                with file_lock:
-                    with open(mapping.filename, 'r+b') as f:
-                        f.seek(chunk.offset)
-                        f.write(chunk_data)
-                    pbar.update(int(chunk.cb_original))
-
-            # 下载并解密数据块
-            with ThreadPoolExecutor(max_workers=128) as executor:
-                # 提交所有任务
-                futures = [executor.submit(download, chunk) for chunk in sorted(mapping.chunks,key=lambda x: x.offset)]
-                # 等待完成
-                for future in as_completed(futures):
-                    try:
-                        future.result()
-                    except Exception as e:
-                        logger.exception(e)
+            match MappingFlags(str(mapping.flags)):
+                case MappingFlags.file:
+                    game_file = Path(mapping.filename)
+                    game_file.parent.mkdir(parents=True, exist_ok=True)
+                    game_file.touch(exist_ok=True)
+                case MappingFlags.dir:
+                    game_file = Path(mapping.filename)
+                    game_file.mkdir(parents=True, exist_ok=True)
+                case _:
+                    raise TypeError(f"意料以外的文件类型:{mapping.flags}")
+            if mapping.filename not in file_locks:
+                file_locks[mapping.filename] = threading.Lock()
+            # 提交所有任务
+            futures.extend([executor.submit(download, mapping, manifest, chunk) for chunk in sorted(mapping.chunks, key=lambda x: x.offset)])
+    # 等待完成
+    for future in as_completed(futures):
+        try:
+            future.result()
+        except Exception as e:
+            logger.exception(e)
+    executor.shutdown()
     pbar.close()
     logger.success("下载完毕")
 

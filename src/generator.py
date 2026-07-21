@@ -42,7 +42,9 @@ def main():
         decryption_keys = get_depots_decryption_key(depot_ids)
         with open(path.join(target_dir, "depots.json"), "w") as f:
             json.dump(decryption_keys, f)
-        #todo 复制下载器到目标文件夹
+        #复制下载器到目标文件夹
+        if path.exists("downloader.exe"):
+            shutil.copy("downloader.exe", target_dir)
         logger.success(f"【{selected_game.name}】生成完毕")
 
 if __name__ == "__main__":

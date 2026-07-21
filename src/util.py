@@ -9,6 +9,7 @@ from zipfile import ZipFile
 
 import httpx
 import vdf
+import zstandard as zstd
 from loguru import logger
 from steam.core.crypto import symmetric_decrypt
 
@@ -16,7 +17,7 @@ from config import STEAM_DOWNLOAD_SERVERS
 from entitys.Depot import InstalledDepot
 from entitys.Game import InstalledGame
 from enums.Status import StateFlags
-import zstandard as zstd
+
 
 def get_steam_install_path():
     """从注册表获取Steam安装路径"""
@@ -98,16 +99,13 @@ def decompress_chunk(data: bytes) -> bytes:
     if data[:4] == b'VSZa':
         return _decompress_vsza(data)
 
-
     # 2. VZa (LZMA)
     if data[:3] == b'VZa':
         return _decompress_vz(data)
 
-
     # 3. ZIP
     if data[:4] == b'PK\x03\x04':
         return _decompress_zip(data)
-
 
     # 4. raw
     return data
@@ -123,36 +121,19 @@ def _decompress_vsza(data: bytes) -> bytes:
     ----
     footer
     """
-
     if data[:4] != b'VSZa':
         raise ValueError("不是 VSZa")
-
-
     # 找 zstd magic
     zstd_magic = b'\x28\xb5\x2f\xfd'
-
     pos = data.find(zstd_magic)
-
-
     if pos < 0:
         raise ValueError("找不到 zstd frame")
-
-
     zstd_data = data[pos:]
-
-
     dctx = zstd.ZstdDecompressor()
-
-
     try:
         result = dctx.decompress(zstd_data)
-
     except Exception as e:
-        raise ValueError(
-            f"VSZa zstd解压失败: {e}"
-        )
-
-
+        raise ValueError(f"VSZa zstd解压失败: {e}")
     return result
 
 def _decompress_vz(data: bytes) -> bytes:
@@ -194,14 +175,13 @@ def _decompress_zip(data: bytes) -> bytes:
     return data
 
 
-httpx_client = None
+_httpx_client = None
 
-
-def _get_httpx_client() -> httpx.Client:
-    global httpx_client
-    if httpx_client is None:
-        httpx_client = httpx.Client()
-    return httpx_client
+def get_httpx_client() -> httpx.Client:
+    global _httpx_client
+    if _httpx_client is None:
+        _httpx_client = httpx.Client()
+    return _httpx_client
 
 
 def download_and_decrypt_chunk(depot_id: str, chunk_sha_hex: str, decryption_key: str):
@@ -210,7 +190,7 @@ def download_and_decrypt_chunk(depot_id: str, chunk_sha_hex: str, decryption_key
         try:
             # 下载
             url = f"http://{server_host}/depot/{depot_id}/chunk/{chunk_sha_hex}"
-            resp = _get_httpx_client().get(url, timeout=30)
+            resp = get_httpx_client().get(url, timeout=10)
             if resp.status_code != 200:
                 continue
             # 解密

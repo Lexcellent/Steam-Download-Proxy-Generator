@@ -8,3 +8,7 @@ class StateFlags(StrEnum):
     updating = "6"
     # 未下载
     undownload = "514"
+
+class MappingFlags(StrEnum):
+    file = "0"
+    dir = "64"
