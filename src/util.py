@@ -9,6 +9,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 import httpx
+import requests
 import vdf
 import zstandard as zstd
 from loguru import logger
@@ -221,7 +222,7 @@ def test_cdn_server(server: ContentServer, depot_id: str, chunk_sha: str):
     url = f"http://{server.host}/depot/{depot_id}/chunk/{chunk_sha}"
     try:
         start = time.perf_counter()
-        resp = get_httpx_client().get(url,timeout=30)
+        resp = get_httpx_client().get(url, timeout=30)
         cost = time.perf_counter() - start
         if resp.status_code == 200:
             return {
@@ -234,22 +235,33 @@ def test_cdn_server(server: ContentServer, depot_id: str, chunk_sha: str):
     return None
 
 
+def get_content_servers(cell_id: int, num_servers=40):
+    for _ in range(5):
+        try:
+            return get_content_servers_from_webapi(cell_id, num_servers=num_servers)
+        except requests.exceptions.ConnectTimeout as _:
+            pass
+        except requests.exceptions.ConnectionError as _:
+            pass
+    return []
+
+
 def refresh_cdn_server():
     logger.info("刷新服务器节点列表")
-    servers = get_content_servers_from_webapi(0, num_servers=40)
+    servers = get_content_servers(0)
     results = []
     for server in servers:
         result = test_cdn_server(server, "3167021", "ccb1bf52956792fac3372220ced49880e0bcec2b")
         if result:
             results.append(result)
     if len(results) == 0:
-        servers = get_content_servers_from_webapi(33, num_servers=40)
+        servers = get_content_servers(33)
         for server in servers:
             result = test_cdn_server(server, "3167021", "ccb1bf52956792fac3372220ced49880e0bcec2b")
             if result:
                 results.append(result)
         if len(results) == 0:
-            raise Exception("未找到合适的下载节点")
+            raise Exception("未找到合适的下载节点,请检查网络情况是否能访问https://api.steampowered.com/IContentServerDirectoryService/GetServersForSteamPipe/v1/")
     results.sort(key=lambda x: x["time"])
     logger.debug(results)
     global STEAM_DOWNLOAD_SERVERS
