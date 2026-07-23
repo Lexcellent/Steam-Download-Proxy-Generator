@@ -7,15 +7,16 @@ import humanize
 from loguru import logger
 
 from config import OUTPUT_PATH
-from util import get_installed_games, get_steam_install_path, get_depots_decryption_key
+from utils.appinfo_util import get_game_localized_name_map
+from utils.util import get_installed_games, get_steam_install_path, get_depots_decryption_key
 
 
 def main():
     installed_games = get_installed_games()
     while True:
-        print("选择要生成的游戏:\n")
+        print("选择要生成的游戏:")
         for index in range(len(installed_games)):
-            print(f"{index + 1} - {installed_games[index].name} (appid:{installed_games[index].appid},size:{humanize.naturalsize(installed_games[index].size_on_disk)})")
+            print(f"{index + 1} - {get_game_localized_name_map().get(str(installed_games[index].appid), installed_games[index].name)} (appid:{installed_games[index].appid},size:{humanize.naturalsize(installed_games[index].size_on_disk)})")
         number = input("输入要生成的游戏序号:\n")
         if not number.isdigit():
             logger.warning("需要输入整数数字")
@@ -42,11 +43,12 @@ def main():
         decryption_keys = get_depots_decryption_key(depot_ids)
         with open(path.join(target_dir, "depots.json"), "w") as f:
             json.dump(decryption_keys, f)
-        #复制下载器到目标文件夹
+        # 复制下载器到目标文件夹
         if path.exists("downloader.exe"):
             shutil.copy("downloader.exe", target_dir)
         logger.success(f"【{selected_game.name}】生成完毕")
         input("回车键继续……")
+
 
 if __name__ == "__main__":
     try:

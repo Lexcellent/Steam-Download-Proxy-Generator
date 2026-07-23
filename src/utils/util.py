@@ -35,6 +35,19 @@ def get_steam_install_path():
     return steam_path
 
 
+def get_steam_language():
+    """从注册表获取Steam语言"""
+    # 打开注册表键
+    key = winreg.OpenKey(
+        winreg.HKEY_CURRENT_USER,
+        r"SOFTWARE\Valve\Steam"
+    )
+    # 查询 Language 的值
+    language, _ = winreg.QueryValueEx(key, "Language")
+    winreg.CloseKey(key)
+    return language
+
+
 def get_installed_games() -> list[InstalledGame]:
     """获取已安装完毕的游戏列表信息"""
     # 从注册表获取steam安装目录

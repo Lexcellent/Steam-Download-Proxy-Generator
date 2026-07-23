@@ -9,7 +9,7 @@ from steam.core.manifest import DepotManifest
 from tqdm import tqdm
 
 from enums.Status import MappingFlags
-from util import download_and_decrypt_chunk, refresh_cdn_server
+from utils.util import download_and_decrypt_chunk, refresh_cdn_server
 
 
 def main():
